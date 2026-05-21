@@ -247,10 +247,11 @@ function Index() {
     const servicoNome = service.name;
     const servicoPreco = service.price;
     const clienteNome = form.nome;
+    const modeloVeiculo = form.modelo;
     const dataAgendamento = formatDateBR(date);
     const horarioAgendamento = time ?? "";
 
-    const mensagem = `Olá, Alex! Gostaria de confirmar meu agendamento no Lava-Car. Seguem meus dados:\n\n*Nome:* ${clienteNome}\n\n*Serviço Escolhido:* ${servicoNome}\n\n*Valor Estimado:* ${servicoPreco}\n\n*Data:* ${dataAgendamento}\n\n*Horário:* ${horarioAgendamento}\n\nAguardo a confirmação da vaga!`;
+    const mensagem = `Olá, Alex! Gostaria de confirmar meu agendamento no Lava-Car.\n\n*Resumo do agendamento:*\n\n*Nome:* ${clienteNome}\n*Serviço:* ${servicoNome}\n*Valor:* ${servicoPreco}\n*Veículo:* ${modeloVeiculo}\n*Data:* ${dataAgendamento}\n*Horário:* ${horarioAgendamento}\n\nAguardo a confirmação da vaga!`;
 
     const url = `https://wa.me/554192701937?text=${encodeURIComponent(mensagem)}`;
     // Use location.href to avoid popup blockers after await
