@@ -1,0 +1,7 @@
+# Alex Lava-Car
+
+> Estética automotiva premium em Curitiba. Lavagem detalhada, higienização de estofados, polimento e atendimento para scooters elétricas, com agendamento rápido pelo WhatsApp.
+
+## Pages
+
+- [Home](/): Apresentação dos serviços, preços e agendamento online.
