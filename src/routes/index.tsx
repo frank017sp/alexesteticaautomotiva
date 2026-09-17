@@ -1,12 +1,388 @@
-import { createFileRoute } from '@tanstack/react-router'; import { useEffect, useMemo, useState } from 'react'; import { useServerFn } from '@tanstack/react-start'; import { toast } from 'sonner'; import { createBooking, getBusyTimes } from '@/lib/bookings.functions'; import { listServicesPublic, listClosedDaysPublic } from '@/lib/admin.functions'; import { ArrowRight, BadgeCheck, Bike, Calendar as CalIcon, Car, CarFront, Check, ChevronLeft, ChevronRight, Clock, Droplets, Instagram, MapPin, MessageCircle, Phone, ShieldCheck, Sofa, Sparkles, User, Volume2, VolumeX, Zap } from 'lucide-react'; import logo from '@/assets/logo.png'; import heroVideo from '@/assets/hero-bg.mp4'; import svcSofa from '@/assets/svc-sofa.webp'; import svcMoto from '@/assets/svc-moto.png'; import car1 from '@/assets/car-1.webp'; import car2 from '@/assets/car-2.webp'; import car3 from '@/assets/car-3.webp'; import car4 from '@/assets/car-4.webp'; import car5 from '@/assets/car-5.webp'; import instagramCard from '@/assets/instagram-card.webp'; const HERO_PHOTOS=[car1,car2,car3,car4,car5]; const SERVICE_VISUALS:Record<string,{icon:typeof Car;image:string}>={conv:{icon:Droplets,image:car1},comp:{icon:Sparkles,image:car2},det_small:{icon:CarFront,image:car3},det_suv:{icon:Car,image:car4},moto:{icon:Bike,image:svcMoto},est:{icon:Sofa,image:svcSofa},plast:{icon:Zap,image:car5}}; const DEFAULT_VISUAL={icon:Car,image:car1}; export const Route=createFileRoute('/')({component:Index,head:()=>({meta:[{title:'Alex Lava-Car · Estética Automotiva Premium'},{name:'description',content:'Lavagem e estética automotiva premium. Escolha o serviço, a data e o horário e confirme seu agendamento pelo WhatsApp.'},{property:'og:title',content:'Alex Lava-Car · Estética Automotiva Premium'},{property:'og:description',content:'Seu carro limpo, protegido e com presença de novo. Escolha seu horário em poucos minutos.'},{property:'og:type',content:'website'},{property:'og:url',content:'https://alexesteticaautomotiva.lovable.app/'}],links:[{rel:'canonical',href:'https://alexesteticaautomotiva.lovable.app/'}],scripts:[{type:'application/ld+json',children:JSON.stringify({'@context':'https://schema.org','@type':'AutoWash',name:'Alex Lava-Car',telephone:'+554192701937',url:'https://alexesteticaautomotiva.lovable.app/',openingHours:'Mo-Sa 07:00-19:00',makesOffer:[{ '@type':'Offer',itemOffered:{'@type':'Service',name:'Lavagem Convencional'},price:'84.99',priceCurrency:'BRL'},{'@type':'Offer',itemOffered:{'@type':'Service',name:'Lavagem Completa'},price:'114.99',priceCurrency:'BRL'},{'@type':'Offer',itemOffered:{'@type':'Service',name:'Lavagem Detalhada - Carros Pequenos'},price:'159.99',priceCurrency:'BRL'},{'@type':'Offer',itemOffered:{'@type':'Service',name:'Lavagem Detalhada - SUVs'},price:'199.99',priceCurrency:'BRL'},{'@type':'Offer',itemOffered:{'@type':'Service',name:'Lavagem de Moto Simples'},price:'39.99',priceCurrency:'BRL'},{'@type':'Offer',itemOffered:{'@type':'Service',name:'Lavagem de Estofados'},price:'299.99',priceCurrency:'BRL'},{'@type':'Offer',itemOffered:{'@type':'Service',name:'Revitalização de Plástico'},price:'24.99',priceCurrency:'BRL'}]})}]} )}); type Service={id:string;name:string;price:string;priceValue:number;icon:typeof Car;image:string;note?:boolean;priceHint?:string}; const FALLBACK_SERVICES:Service[]=[{id:'conv',name:'Lavagem Convencional',price:'R$ 84,99',priceValue:84.99,icon:Droplets,image:car1},{id:'comp',name:'Lavagem Completa',price:'R$ 114,99',priceValue:114.99,icon:Sparkles,image:car2},{id:'det_small',name:'Lavagem Detalhada',price:'R$ 159,99',priceValue:159.99,priceHint:'Carros pequenos',icon:CarFront,image:car3},{id:'det_suv',name:'Lavagem Detalhada',price:'R$ 199,99',priceValue:199.99,priceHint:'Carros SUV',icon:Car,image:car4},{id:'moto',name:'Lavagem de Moto Simples',price:'R$ 39,99',priceValue:39.99,icon:Bike,image:svcMoto},{id:'est',name:'Lavagem de Estofados',price:'R$ 299,99',priceValue:299.99,priceHint:'A partir de',icon:Sofa,image:svcSofa,note:true},{id:'plast',name:'Revitalização de Plástico',price:'R$ 24,99',priceValue:24.99,icon:Zap,image:car5}]; const WEEKDAY_TIMES=['07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00'];const SUNDAY_TIMES=['07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00'];const MONTHS_PT=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];function Index(){const now=new Date();const todayStart=new Date(now.getFullYear(),now.getMonth(),now.getDate());const [services,setServices]=useState<Service[]>(FALLBACK_SERVICES);const [closedDays,setClosedDays]=useState<Set<string>>(new Set());const [serviceId,setServiceId]=useState<string|null>(null);const [form,setForm]=useState({nome:'',whats:'',modelo:''});const [date,setDate]=useState<Date|null>(null);const [viewMonth,setViewMonth]=useState({y:now.getFullYear(),m:now.getMonth()});const [time,setTime]=useState<string|null>(null);const [muted,setMuted]=useState(true);const [busyTimes,setBusyTimes]=useState<Set<string>>(new Set());const [loadingBusy,setLoadingBusy]=useState(false);const [busyError,setBusyError]=useState(false);const [submitting,setSubmitting]=useState(false);const [videoEnded,setVideoEnded]=useState(false);const [photoIdx,setPhotoIdx]=useState(0);const getBusyTimesFn=useServerFn(getBusyTimes);const createBookingFn=useServerFn(createBooking);const listServicesFn=useServerFn(listServicesPublic);const listClosedDaysFn=useServerFn(listClosedDaysPublic);useEffect(()=>{if(!videoEnded)return;const id=window.setInterval(()=>setPhotoIdx(i=>(i+1)%HERO_PHOTOS.length),2400);return()=>window.clearInterval(id)},[videoEnded]);useEffect(()=>{listServicesFn().then(res=>{const mapped:Service[]=(res.services??[]).map((row:any)=>{const vis=SERVICE_VISUALS[row.id]??DEFAULT_VISUAL;return{id:row.id,name:row.name,price:row.price,priceValue:Number(row.price_value),icon:vis.icon,image:vis.image,note:!!row.price_hint,priceHint:row.price_hint??undefined}});if(mapped.length)setServices(mapped)}).catch(e=>console.error('listServices',e));listClosedDaysFn().then(res=>setClosedDays(new Set((res.closedDays??[]).map((r:any)=>r.date)))).catch(e=>console.error('listClosedDays',e))},[listServicesFn,listClosedDaysFn]);const service=services.find(s=>s.id===serviceId)??null;const currentStep=useMemo(()=>{if(!form.nome||!form.whats||!form.modelo)return 1;if(!date)return 2;return 3},[form,date]);const formatDateBR=(d:Date)=>`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;const formatDateISO=(d:Date)=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;useEffect(()=>{if(!date){setBusyTimes(new Set());setBusyError(false);return}let cancelled=false;setLoadingBusy(true);setBusyError(false);getBusyTimesFn({data:{date:formatDateISO(date)}}).then(res=>{if(cancelled)return;if(res.error){setBusyError(true);setTime(null);return}setBusyTimes(new Set(res.busy))}).catch(err=>{if(!cancelled){console.error(err);setBusyError(true);setTime(null)}}).finally(()=>!cancelled&&setLoadingBusy(false));return()=>{cancelled=true}},[date,getBusyTimesFn]);const scrollToBooking=()=>document.getElementById('booking')?.scrollIntoView({behavior:'smooth',block:'start'});const scrollToServices=()=>document.getElementById('services')?.scrollIntoView({behavior:'smooth',block:'start'});const handleWhatsAppRedirect=async()=>{if(submitting)return;if(!serviceId||!service){toast.error('Selecione um serviço primeiro.');scrollToServices();return}if(!form.nome||!form.whats||!form.modelo){toast.error('Preencha nome, WhatsApp e modelo do veículo.');scrollToBooking();return}if(!date){toast.error('Escolha uma data.');scrollToBooking();return}if(busyError||loadingBusy){toast.error('Não foi possível verificar a disponibilidade. Tente escolher a data novamente.');return}if(!time){toast.error('Escolha um horário.');scrollToBooking();return}setSubmitting(true);try{const res=await createBookingFn({data:{clienteNome:form.nome,clienteWhats:form.whats,modelo:form.modelo,servicoId:service.id,data:formatDateISO(date),horario:time}});if(!res.ok){if(res.conflict){toast.error('Esse horário acabou de ser reservado. Escolha outro.');const refreshed=await getBusyTimesFn({data:{date:formatDateISO(date)}});setBusyTimes(new Set(refreshed.busy));setTime(null)}else toast.error(res.error??'Não foi possível confirmar o agendamento.');return}}catch(err){console.error(err);toast.error('Falha de conexão. Tente novamente.');return}finally{setSubmitting(false)}const mensagem=`Olá, Alex! Gostaria de confirmar meu agendamento no Lava-Car.
+import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
+import { createBooking, getBusyTimes } from "@/lib/bookings.functions";
+import { listServicesPublic, listClosedDaysPublic } from "@/lib/admin.functions";
+import { ArrowRight, BadgeCheck, Bike, Calendar as CalIcon, Car, CarFront, Check, ChevronLeft, ChevronRight, Clock, Droplets, Instagram, MapPin, MessageCircle, Phone, ShieldCheck, Sofa, Sparkles, User, Volume2, VolumeX, Zap } from "lucide-react";
+import logo from "@/assets/logo.png";
+import heroVideo from "@/assets/hero-bg.mp4";
+import svcSofa from "@/assets/svc-sofa.webp";
+import svcMoto from "@/assets/svc-moto.png";
+import car1 from "@/assets/car-1.webp";
+import car2 from "@/assets/car-2.webp";
+import car3 from "@/assets/car-3.webp";
+import car4 from "@/assets/car-4.webp";
+import car5 from "@/assets/car-5.webp";
+import instagramCard from "@/assets/instagram-card.webp";
 
-*Resumo do agendamento:*
+const HERO_PHOTOS = [car1, car2, car3, car4, car5];
+const SERVICE_VISUALS: Record<string, { icon: typeof Car; image: string }> = {
+  conv: { icon: Droplets, image: car1 },
+  comp: { icon: Sparkles, image: car2 },
+  det_small: { icon: CarFront, image: car3 },
+  det_suv: { icon: Car, image: car4 },
+  moto: { icon: Bike, image: svcMoto },
+  est: { icon: Sofa, image: svcSofa },
+  plast: { icon: Zap, image: car5 },
+};
+const DEFAULT_VISUAL = { icon: Car, image: car1 };
 
-*Nome:* ${form.nome}
-*Serviço:* ${service.name}${service.priceHint?` (${service.priceHint})`:''}
-*Valor:* ${service.price}
-*Veículo:* ${form.modelo}
-*Data:* ${formatDateBR(date)}
-*Horário:* ${time}
+export const Route = createFileRoute("/")({
+  component: Index,
+  head: () => ({
+    meta: [
+      { title: "Alex Lava-Car · Estética Automotiva Premium" },
+      { name: "description", content: "Lavagem e estética automotiva premium. Escolha o serviço, a data e o horário e confirme seu agendamento pelo WhatsApp." },
+      { property: "og:title", content: "Alex Lava-Car · Estética Automotiva Premium" },
+      { property: "og:description", content: "Seu carro limpo, protegido e com presença de novo. Escolha seu horário em poucos minutos." },
+      { property: "og:type", content: "website" },
+      { property: "og:url", content: "https://alexesteticaautomotiva.lovable.app/" },
+    ],
+    links: [{ rel: "canonical", href: "https://alexesteticaautomotiva.lovable.app/" }],
+    scripts: [{ type: "application/ld+json", children: JSON.stringify({
+      "@context": "https://schema.org", "@type": "AutoWash", name: "Alex Lava-Car",
+      telephone: "+554192701937", url: "https://alexesteticaautomotiva.lovable.app/",
+      openingHours: "Mo-Sa 07:00-19:00",
+      makesOffer: [
+        { "@type": "Offer", itemOffered: { "@type": "Service", name: "Lavagem Convencional" }, price: "84.99", priceCurrency: "BRL" },
+        { "@type": "Offer", itemOffered: { "@type": "Service", name: "Lavagem Completa" }, price: "114.99", priceCurrency: "BRL" },
+        { "@type": "Offer", itemOffered: { "@type": "Service", name: "Lavagem Detalhada - Carros Pequenos" }, price: "159.99", priceCurrency: "BRL" },
+        { "@type": "Offer", itemOffered: { "@type": "Service", name: "Lavagem Detalhada - SUVs" }, price: "199.99", priceCurrency: "BRL" },
+        { "@type": "Offer", itemOffered: { "@type": "Service", name: "Lavagem de Moto Simples" }, price: "39.99", priceCurrency: "BRL" },
+        { "@type": "Offer", itemOffered: { "@type": "Service", name: "Lavagem de Estofados" }, price: "299.99", priceCurrency: "BRL" },
+        { "@type": "Offer", itemOffered: { "@type": "Service", name: "Revitalização de Plástico" }, price: "24.99", priceCurrency: "BRL" },
+      ],
+    }) }],
+  }),
+});
 
-Aguardo a confirmação da vaga!`;window.location.href=`https://wa.me/554192701937?text=${encodeURIComponent(mensagem)}`};const daysInMonth=new Date(viewMonth.y,viewMonth.m+1,0).getDate();const firstWeekday=new Date(viewMonth.y,viewMonth.m,1).getDay();const canGoPrev=viewMonth.y>now.getFullYear()||(viewMonth.y===now.getFullYear()&&viewMonth.m>now.getMonth());const selectedIsToday=!!date&&date.getFullYear()===now.getFullYear()&&date.getMonth()===now.getMonth()&&date.getDate()===now.getDate();const nowMinutes=now.getHours()*60+now.getMinutes();const isPastTime=(t:string)=>{if(!selectedIsToday)return false;const[h,m]=t.split(':').map(Number);return h*60+m<=nowMinutes};return(<main className='min-h-screen overflow-x-hidden bg-white text-zinc-950'><nav className='fixed inset-x-0 top-0 z-50 border-b border-zinc-200 bg-white/92 backdrop-blur-xl'><div className='mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6'><button onClick={()=>window.scrollTo({top:0,behavior:'smooth'})} className='flex items-center gap-3'><img src={logo} alt='Alex Lava-Car' className='h-11 w-11 object-contain'/><div className='text-left leading-tight text-zinc-950'><strong className='block text-sm tracking-wide'>ALEX LAVA-CAR</strong><span className='text-[10px] uppercase tracking-[0.24em] text-zinc-500'>Estética automotiva</span></div></button><div className='hidden items-center gap-7 text-sm font-semibold text-zinc-600 md:flex'><button onClick={scrollToServices} className='transition hover:text-orange-500'>Serviços</button><button onClick={scrollToBooking} className='transition hover:text-orange-500'>Agendamento</button><a href='#localizacao' className='transition hover:text-orange-500'>Localização</a></div><button onClick={scrollToBooking} className='rounded-full bg-orange-500 px-4 py-2 text-xs font-extrabold uppercase tracking-wider text-black transition hover:bg-orange-400 sm:px-5 sm:text-sm'>Agendar</button></div></nav><header className='relative min-h-[760px] overflow-hidden pt-16 lg:min-h-[820px]'><div className='absolute inset-0'><video src={heroVideo} autoPlay muted={muted} playsInline preload='metadata' onEnded={()=>setVideoEnded(true)} className={`h-full w-full object-cover transition-opacity duration-1000 ${videoEnded?'opacity-0':'opacity-100'}`}/>{HERO_PHOTOS.map((src,i)=><img key={src} src={src} alt='' aria-hidden loading={i===0?'eager':'lazy'} className='absolute inset-0 h-full w-full object-cover transition-opacity duration-1000' style={{opacity:videoEnded&&photoIdx===i?1:0}}/>)}<div className='absolute inset-0 bg-[linear-gradient(90deg,rgba(5,7,11,.95)_0%,rgba(5,7,11,.76)_42%,rgba(5,7,11,.3)_72%,rgba(5,7,11,.45)_100%)]'/><div className='absolute inset-0 bg-[linear-gradient(0deg,#080b10_0%,transparent_28%,transparent_100%)]'/><div className='absolute inset-0 opacity-40 [background:radial-gradient(circle_at_72%_36%,rgba(249,115,22,.35),transparent_27%)]'/></div><button onClick={()=>setMuted(m=>!m)} aria-label={muted?'Ativar som':'Desativar som'} className='absolute right-5 top-24 z-20 grid h-10 w-10 place-items-center rounded-full border border-white/15 bg-black/45 text-white/80 backdrop-blur-md transition hover:border-orange-400 hover:text-orange-400'>{muted?<VolumeX className='h-4 w-4'/>:<Volume2 className='h-4 w-4'/>}</button><div className='relative z-10 mx-auto flex min-h-[700px] max-w-7xl items-center px-5 py-20 sm:px-6 lg:min-h-[760px]'><div className='max-w-3xl animate-fade-up'><div className='mb-6 inline-flex items-center gap-2 rounded-full border border-orange-400/25 bg-orange-400/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-orange-300 backdrop-blur-md'><Sparkles className='h-3.5 w-3.5'/> Cuidado que aparece no primeiro olhar</div><h1 className='max-w-3xl text-5xl font-black uppercase leading-[.92] tracking-[-0.045em] text-white sm:text-6xl lg:text-8xl'>Seu carro com <span className='text-orange-500'>presença de novo.</span></h1><p className='mt-7 max-w-xl text-base leading-relaxed text-white/65 sm:text-lg'>Lavagem e estética automotiva com atenção aos detalhes, acabamento caprichado e agendamento sem enrolação.</p><div className='mt-9 flex flex-col gap-3 sm:flex-row'><button onClick={scrollToServices} className='group inline-flex items-center justify-center gap-2 rounded-2xl bg-orange-500 px-7 py-4 text-sm font-black uppercase tracking-[0.12em] text-black shadow-[0_20px_60px_-20px_rgba(249,115,22,.8)] transition hover:-translate-y-0.5 hover:bg-orange-400'>Ver serviços <ArrowRight className='h-4 w-4 transition group-hover:translate-x-1'/></button><a href='https://wa.me/554192701937' target='_blank' rel='noreferrer' className='inline-flex items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/5 px-7 py-4 text-sm font-bold text-white backdrop-blur-md transition hover:border-white/30 hover:bg-white/10'><MessageCircle className='h-4 w-4'/> Falar no WhatsApp</a></div><div className='mt-10 grid max-w-xl grid-cols-1 gap-3 sm:grid-cols-2'>{[[BadgeCheck,'Atendimento caprichado'],[ShieldCheck,'Horário reservado']].map(([Icon,label],i)=>{const BenefitIcon=Icon as typeof BadgeCheck;return <div key={i} className='flex items-center gap-3 rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm text-white/70 backdrop-blur-md'><BenefitIcon className='h-4 w-4 text-orange-400'/>{label as string}</div>})}</div></div></div></header><section id='services' className='relative scroll-mt-16 bg-white py-20 sm:py-24'><div className='mx-auto max-w-7xl px-4 sm:px-6'><div className='mb-10 flex flex-col justify-between gap-5 lg:flex-row lg:items-end'><div><p className='mb-3 text-xs font-black uppercase tracking-[0.28em] text-orange-500'>Serviços e valores</p><h2 className='max-w-2xl text-4xl font-black uppercase leading-none tracking-[-0.035em] text-zinc-950 sm:text-5xl lg:text-6xl'>Escolha o cuidado ideal para o seu veículo.</h2></div><p className='max-w-md text-sm leading-relaxed text-zinc-600 sm:text-base'>Deslize para conhecer os serviços, compare os valores e escolha o cuidado que seu veículo merece.</p></div><div className='-mx-4 overflow-x-auto px-4 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'><div className='flex snap-x gap-4'>{services.map((s,idx)=>{const active=serviceId===s.id;const Icon=s.icon;return <button key={s.id} onClick={()=>{setServiceId(s.id);setTimeout(scrollToBooking,180)}} style={{animationDelay:`${idx*60}ms`}} className={`group relative w-[250px] shrink-0 snap-start overflow-hidden rounded-[24px] border text-left transition-all duration-300 animate-fade-up sm:w-[280px] ${active?'border-orange-400 bg-orange-50 shadow-[0_18px_50px_-28px_rgba(249,115,22,.45)]':'border-zinc-200 bg-white hover:-translate-y-1 hover:border-orange-200'}`}><div className='relative h-36 overflow-hidden border-b border-zinc-100 bg-zinc-100'><div className='absolute left-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-xl border border-white/80 bg-white/90 text-orange-500 shadow-sm'><Icon className='h-4 w-4'/></div>{active&&<div className='absolute right-3 top-3 z-10 grid h-7 w-7 place-items-center rounded-full bg-orange-500 text-black'><Check className='h-4 w-4' strokeWidth={3}/></div>}<img src={s.image} alt={s.name} loading='lazy' className='h-full w-full object-cover transition duration-500 group-hover:scale-105'/></div><div className='p-4'>{s.priceHint&&<span className='mb-2 block text-[10px] font-black uppercase tracking-[0.2em] text-orange-500'>{s.priceHint}</span>}<h3 className='min-h-[44px] text-base font-extrabold uppercase leading-tight text-zinc-950'>{s.name}</h3><div className='mt-4 flex items-end justify-between gap-3'><div><span className='block text-[10px] uppercase tracking-[0.18em] text-zinc-400'>Valor</span><strong className='text-xl font-black text-orange-500'>{s.price}</strong></div><span className='grid h-9 w-9 place-items-center rounded-full border border-zinc-200 bg-zinc-50 text-zinc-500 transition group-hover:border-orange-300 group-hover:text-orange-500'><ArrowRight className='h-4 w-4'/></span></div></div></button>})}</div></div><p className='mt-5 text-center text-xs text-zinc-500'>*O valor final de serviços “a partir de” pode variar conforme tamanho e condição do item.</p></div></section><section id='booking' className='scroll-mt-16 border-y border-zinc-200 bg-[#faf8f5] py-20 sm:py-24'><div className='mx-auto max-w-7xl px-4 sm:px-6'><div className='grid gap-8 lg:grid-cols-[.8fr_1.2fr] lg:gap-12'><aside className='lg:sticky lg:top-24 lg:self-start'><p className='mb-3 text-xs font-black uppercase tracking-[0.28em] text-orange-500'>Reservar horário</p><h2 className='text-4xl font-black uppercase leading-none tracking-[-0.035em] text-zinc-950 sm:text-5xl'>Escolha o melhor dia. O resto é com a gente.</h2><p className='mt-5 max-w-lg text-base leading-relaxed text-zinc-600'>Preencha seus dados, escolha a data e o horário disponível. O pedido é registrado e você segue para o WhatsApp para combinar a confirmação com a equipe.</p><div className='mt-6 flex flex-wrap gap-2'>{service&&<span className='inline-flex items-center rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-[11px] font-bold text-orange-700'>{service.name} • {service.price}</span>}<span className='inline-flex items-center rounded-full border border-zinc-200 bg-white px-3 py-1 text-[11px] font-medium text-zinc-600'>Processo simples</span><span className='inline-flex items-center rounded-full border border-zinc-200 bg-white px-3 py-1 text-[11px] font-medium text-zinc-600'>Vaga protegida</span></div></aside><div className='rounded-[32px] border border-zinc-200 bg-white p-4 shadow-[0_20px_60px_-35px_rgba(0,0,0,.22)] sm:p-7'><div className='mb-7 flex items-center justify-center'>{[{n:1,label:'Dados'},{n:2,label:'Data'},{n:3,label:'Horário'}].map(({n,label},i)=>{const done=currentStep>n;const active=currentStep===n;return <div key={n} className='flex items-center'><div className='flex flex-col items-center gap-2'><div className={`grid h-9 w-9 place-items-center rounded-full border text-xs font-black transition ${done||active?'border-orange-400 bg-orange-500 text-black':'border-zinc-200 bg-zinc-50 text-zinc-400'}`}>{done?<Check className='h-4 w-4' strokeWidth={3}/>:n}</div><span className={`text-[9px] font-black uppercase tracking-wider ${done||active?'text-zinc-950':'text-zinc-400'}`}>{label}</span></div>{i<2&&<div className={`mx-2 mb-5 h-px w-8 sm:mx-4 sm:w-16 ${currentStep>n?'bg-orange-500':'bg-zinc-200'}`}/>}</div>})}</div><div className='grid gap-4 sm:grid-cols-2'><Field label='Seu nome' value={form.nome} onChange={v=>setForm({...form,nome:v})} placeholder='Ex: Alexandre' icon={User}/><Field label='WhatsApp' value={form.whats} onChange={v=>setForm({...form,whats:v})} placeholder='(41) 99999-9999' inputMode='tel' icon={Phone}/><div className='sm:col-span-2'><Field label='Modelo do veículo' value={form.modelo} onChange={v=>setForm({...form,modelo:v})} placeholder='Ex: Honda Civic 2022' icon={CarFront}/></div></div><div className='my-7 h-px bg-zinc-200'/><div className='grid gap-6 xl:grid-cols-[1.08fr_.92fr]'><div><div className='mb-4 flex items-center justify-between'><button disabled={!canGoPrev} onClick={()=>{if(!canGoPrev)return;setViewMonth(v=>v.m===0?{y:v.y-1,m:11}:{y:v.y,m:v.m-1})}} className='grid h-9 w-9 place-items-center rounded-xl border border-zinc-200 bg-zinc-50 text-zinc-600 disabled:opacity-20'><ChevronLeft className='h-4 w-4'/></button><div className='flex items-center gap-2'><CalIcon className='h-4 w-4 text-orange-500'/><strong className='text-sm uppercase tracking-wider text-zinc-900'>{MONTHS_PT[viewMonth.m]} {viewMonth.y}</strong></div><button onClick={()=>setViewMonth(v=>v.m===11?{y:v.y+1,m:0}:{y:v.y,m:v.m+1})} className='grid h-9 w-9 place-items-center rounded-xl border border-zinc-200 bg-zinc-50 text-zinc-600'><ChevronRight className='h-4 w-4'/></button></div><div className='grid grid-cols-7 gap-1.5 text-center text-[9px] font-black uppercase tracking-wider text-zinc-400'>{['D','S','T','Q','Q','S','S'].map((d,i)=><span key={`${d}-${i}`}>{d}</span>)}</div><div className='mt-2 grid grid-cols-7 gap-1.5'>{Array.from({length:firstWeekday}).map((_,i)=><span key={`blank-${i}`}/>)}{Array.from({length:daysInMonth},(_,i)=>i+1).map(day=>{const d=new Date(viewMonth.y,viewMonth.m,day);const iso=formatDateISO(d);const isPast=d<todayStart;const isClosed=closedDays.has(iso);const isSel=!!date&&formatDateISO(date)===iso;const disabled=isPast||isClosed;return <button key={day} disabled={disabled} onClick={()=>{setDate(d);setTime(null)}} className={`aspect-square rounded-xl text-xs font-bold transition ${isSel?'bg-orange-500 text-black':disabled?'cursor-not-allowed bg-zinc-50 text-zinc-300 line-through':'border border-zinc-200 bg-white text-zinc-700 hover:border-orange-300 hover:text-orange-500'}`}>{day}</button>})}</div></div><div><p className='mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-[.18em] text-zinc-500'><Clock className='h-4 w-4 text-orange-500'/> Horários disponíveis</p><div className='grid grid-cols-3 gap-2 sm:grid-cols-4 xl:grid-cols-3'>{(date&&date.getDay()===0?SUNDAY_TIMES:WEEKDAY_TIMES).map(t=>{const busy=busyTimes.has(t)||isPastTime(t)||!date||loadingBusy||busyError;const selected=time===t;return <button key={t} disabled={busy} onClick={()=>setTime(t)} className={`rounded-xl border py-3 text-xs font-extrabold transition ${selected?'border-orange-400 bg-orange-500 text-black':busy?'cursor-not-allowed border-zinc-100 bg-zinc-50 text-zinc-300 line-through':'border-zinc-200 bg-white text-zinc-700 hover:border-orange-300 hover:text-orange-500'}`}>{t}</button>})}</div>{!date&&<p className='mt-3 text-xs text-zinc-500'>Selecione uma data para liberar os horários.</p>}{busyError&&<p role='alert' className='mt-3 text-xs text-orange-600'>Não foi possível verificar as vagas. Selecione a data novamente para tentar de novo.</p>}</div></div><div className='mt-7 rounded-2xl border border-orange-200 bg-orange-50 p-4 sm:flex sm:items-center sm:justify-between sm:gap-5'><div><span className='text-[10px] font-black uppercase tracking-[.18em] text-zinc-500'>Resumo</span><strong className='mt-1 block text-sm text-zinc-950'>{service?service.name:'Nenhum serviço selecionado'}</strong><span className='text-xs text-zinc-600'>{date?formatDateBR(date):'Data pendente'} {time?`· ${time}`:''}</span></div><strong className='mt-3 block text-2xl font-black text-orange-500 sm:mt-0'>{service?service.price:'R$ —'}</strong></div><button onClick={handleWhatsAppRedirect} disabled={submitting} className='mt-4 flex w-full items-center justify-center gap-3 rounded-2xl bg-[#25D366] px-6 py-4 text-sm font-black uppercase tracking-[.1em] text-black transition hover:-translate-y-0.5 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50'><MessageCircle className='h-5 w-5 fill-black' strokeWidth={0}/>{submitting?'Salvando agendamento...':'Confirmar via WhatsApp'}</button></div></div></div></section><section className='bg-white py-20' id='localizacao'><div className='mx-auto grid max-w-7xl gap-5 px-4 sm:px-6 lg:grid-cols-2'><a href='https://www.instagram.com/alexlavacar17?igsh=MWliODEzMjZ4cDh5bw==' target='_blank' rel='noopener noreferrer' className='group overflow-hidden rounded-[28px] border border-zinc-200 bg-white'><div className='flex items-center justify-between border-b border-zinc-200 p-5'><div><p className='text-[10px] font-black uppercase tracking-[.2em] text-orange-500'>Instagram</p><strong className='mt-1 block text-lg text-zinc-950'>Acompanhe os resultados</strong></div><Instagram className='h-6 w-6 text-zinc-400 transition group-hover:text-orange-500'/></div><img src={instagramCard} alt='Instagram Alex Lava-Car' className='h-[330px] w-full object-cover object-top transition duration-500 group-hover:scale-[1.02]' loading='lazy'/></a><div className='overflow-hidden rounded-[28px] border border-zinc-200 bg-white'><div className='flex items-center justify-between border-b border-zinc-200 p-5'><div><p className='text-[10px] font-black uppercase tracking-[.2em] text-orange-500'>Localização</p><strong className='mt-1 block text-lg text-zinc-950'>Venha até a Alex Lava-Car</strong></div><MapPin className='h-6 w-6 text-zinc-400'/></div><iframe title='Localização Alex Lava-Car' src='https://www.google.com/maps?q=-20.8038883,-48.8034019&z=17&output=embed' width='100%' height={330} style={{border:0,display:'block',filter:'grayscale(.15) contrast(1.05)'}} allowFullScreen loading='lazy'/></div></div></section><footer className='border-t border-zinc-200 bg-white py-10'><div className='mx-auto flex max-w-7xl flex-col items-center justify-between gap-6 px-4 text-center sm:px-6 md:flex-row md:text-left'><div className='flex items-center gap-3'><img src={logo} alt='Alex Lava-Car' className='h-12 w-12 object-contain'/><div><strong className='block text-sm text-zinc-950'>ALEX LAVA-CAR</strong><span className='text-xs text-zinc-500'>Estética Automotiva</span></div></div><p className='text-xs text-zinc-500'>© {new Date().getFullYear()} Alex Lava-Car. Todos os direitos reservados.</p><a href='https://wa.me/5517991279772' target='_blank' rel='noopener noreferrer' className='text-xs text-zinc-500 transition hover:text-orange-500'>feito por <strong>Franco</strong></a></div></footer><a href='https://wa.me/554192701937' target='_blank' rel='noreferrer' aria-label='Falar no WhatsApp' className='fixed bottom-5 right-5 z-50 grid h-14 w-14 place-items-center rounded-full bg-[#25D366] text-black shadow-[0_12px_35px_-10px_rgba(37,211,102,.75)] transition hover:scale-105'><MessageCircle className='h-6 w-6 fill-black' strokeWidth={0}/></a></main>)}function Field({label,value,onChange,placeholder,inputMode,icon:Icon}:{label:string;value:string;onChange:(v:string)=>void;placeholder?:string;inputMode?:'text'|'tel'|'email';icon:typeof User}){return <label className='block'><span className='mb-2 block text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500'>{label}</span><div className='flex items-center rounded-2xl border border-zinc-200 bg-zinc-50 px-4 transition focus-within:border-orange-300 focus-within:bg-orange-50'><Icon className='h-4 w-4 shrink-0 text-orange-500'/><input type='text' inputMode={inputMode} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} className='w-full bg-transparent px-3 py-3.5 text-sm font-medium text-zinc-900 outline-none placeholder:text-zinc-400'/></div></label>}
+type Service = {
+  id: string; name: string; price: string; priceValue: number;
+  icon: typeof Car; image: string; note?: boolean; priceHint?: string;
+};
+const FALLBACK_SERVICES: Service[] = [
+  { id: "conv", name: "Lavagem Convencional", price: "R$ 84,99", priceValue: 84.99, icon: Droplets, image: car1 },
+  { id: "comp", name: "Lavagem Completa", price: "R$ 114,99", priceValue: 114.99, icon: Sparkles, image: car2 },
+  { id: "det_small", name: "Lavagem Detalhada", price: "R$ 159,99", priceValue: 159.99, priceHint: "Carros pequenos", icon: CarFront, image: car3 },
+  { id: "det_suv", name: "Lavagem Detalhada", price: "R$ 199,99", priceValue: 199.99, priceHint: "Carros SUV", icon: Car, image: car4 },
+  { id: "moto", name: "Lavagem de Moto Simples", price: "R$ 39,99", priceValue: 39.99, icon: Bike, image: svcMoto },
+  { id: "est", name: "Lavagem de Estofados", price: "R$ 299,99", priceValue: 299.99, priceHint: "A partir de", icon: Sofa, image: svcSofa, note: true },
+  { id: "plast", name: "Revitalização de Plástico", price: "R$ 24,99", priceValue: 24.99, icon: Zap, image: car5 },
+];
+
+// Associados aos IDs dos serviços, não aos nomes: os dois tipos de lavagem detalhada têm vantagens próprias.
+const SERVICE_BENEFITS: Record<string, readonly [string, string]> = {
+  conv: ["Limpeza externa caprichada", "Ideal para o dia a dia"],
+  comp: ["Limpeza interna e externa", "Atenção aos detalhes"],
+  det_small: ["Limpeza mais minuciosa", "Acabamento nos detalhes"],
+  det_suv: ["Cuidado para carros maiores", "Atenção em cada detalhe"],
+  moto: ["Cuidado com a sua moto", "Ideal para o dia a dia"],
+  est: ["Limpeza dos estofados", "Mais conforto no interior"],
+  plast: ["Visual renovado", "Cuidado com o acabamento"],
+};
+const DEFAULT_BENEFITS: readonly [string, string] = ["Atendimento caprichado", "Cuidado nos detalhes"];
+const WEEKDAY_TIMES = ["07:00", "08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00"];
+const SUNDAY_TIMES = ["07:00", "08:00", "09:00", "10:00", "11:00", "12:00", "13:00", "14:00"];
+const MONTHS_PT = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
+function Index() {
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const [services, setServices] = useState<Service[]>(FALLBACK_SERVICES);
+  const [closedDays, setClosedDays] = useState<Set<string>>(new Set());
+  const [serviceId, setServiceId] = useState<string | null>(null);
+  const [form, setForm] = useState({ nome: "", whats: "", modelo: "" });
+  const [date, setDate] = useState<Date | null>(null);
+  const [viewMonth, setViewMonth] = useState({ y: now.getFullYear(), m: now.getMonth() });
+  const [time, setTime] = useState<string | null>(null);
+  const [muted, setMuted] = useState(true);
+  const [busyTimes, setBusyTimes] = useState<Set<string>>(new Set());
+  const [loadingBusy, setLoadingBusy] = useState(false);
+  const [busyError, setBusyError] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [videoEnded, setVideoEnded] = useState(false);
+  const [photoIdx, setPhotoIdx] = useState(0);
+
+  const getBusyTimesFn = useServerFn(getBusyTimes);
+  const createBookingFn = useServerFn(createBooking);
+  const listServicesFn = useServerFn(listServicesPublic);
+  const listClosedDaysFn = useServerFn(listClosedDaysPublic);
+
+  useEffect(() => {
+    if (!videoEnded) return;
+    const id = window.setInterval(() => setPhotoIdx((i) => (i + 1) % HERO_PHOTOS.length), 2400);
+    return () => window.clearInterval(id);
+  }, [videoEnded]);
+
+  useEffect(() => {
+    listServicesFn().then((res) => {
+      const mapped: Service[] = (res.services ?? []).map((row: any) => {
+        const vis = SERVICE_VISUALS[row.id] ?? DEFAULT_VISUAL;
+        return {
+          id: row.id, name: row.name, price: row.price, priceValue: Number(row.price_value),
+          icon: vis.icon, image: vis.image, note: !!row.price_hint, priceHint: row.price_hint ?? undefined,
+        };
+      });
+      if (mapped.length) setServices(mapped);
+    }).catch((e) => console.error("listServices", e));
+    listClosedDaysFn().then((res) => setClosedDays(new Set((res.closedDays ?? []).map((r: any) => r.date)))).catch((e) => console.error("listClosedDays", e));
+  }, [listServicesFn, listClosedDaysFn]);
+
+  const service = services.find((s) => s.id === serviceId) ?? null;
+  const serviceBenefits = service ? SERVICE_BENEFITS[service.id] ?? DEFAULT_BENEFITS : null;
+  const currentStep = useMemo(() => {
+    if (!form.nome || !form.whats || !form.modelo) return 1;
+    if (!date) return 2;
+    return 3;
+  }, [form, date]);
+  const formatDateBR = (d: Date) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+  const formatDateISO = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+  useEffect(() => {
+    if (!date) { setBusyTimes(new Set()); setBusyError(false); return; }
+    let cancelled = false;
+    setLoadingBusy(true);
+    setBusyError(false);
+    getBusyTimesFn({ data: { date: formatDateISO(date) } })
+      .then((res) => {
+        if (cancelled) return;
+        if (res.error) { setBusyError(true); setTime(null); return; }
+        setBusyTimes(new Set(res.busy));
+      })
+      .catch((err) => { if (!cancelled) { console.error(err); setBusyError(true); setTime(null); } })
+      .finally(() => !cancelled && setLoadingBusy(false));
+    return () => { cancelled = true; };
+  }, [date, getBusyTimesFn]);
+
+  const scrollToBooking = () => document.getElementById("booking")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const scrollToServices = () => document.getElementById("services")?.scrollIntoView({ behavior: "smooth", block: "start" });
+
+  const handleWhatsAppRedirect = async () => {
+    if (submitting) return;
+    if (!serviceId || !service) { toast.error("Selecione um serviço primeiro."); scrollToServices(); return; }
+    if (!form.nome || !form.whats || !form.modelo) { toast.error("Preencha nome, WhatsApp e modelo do veículo."); scrollToBooking(); return; }
+    if (!date) { toast.error("Escolha uma data."); scrollToBooking(); return; }
+    if (busyError || loadingBusy) { toast.error("Não foi possível verificar a disponibilidade. Tente escolher a data novamente."); return; }
+    if (!time) { toast.error("Escolha um horário."); scrollToBooking(); return; }
+    setSubmitting(true);
+    try {
+      const res = await createBookingFn({ data: {
+        clienteNome: form.nome, clienteWhats: form.whats, modelo: form.modelo,
+        servicoId: service.id, data: formatDateISO(date), horario: time,
+      } });
+      if (!res.ok) {
+        if (res.conflict) {
+          toast.error("Esse horário acabou de ser reservado. Escolha outro.");
+          const refreshed = await getBusyTimesFn({ data: { date: formatDateISO(date) } });
+          setBusyTimes(new Set(refreshed.busy)); setTime(null);
+        } else toast.error(res.error ?? "Não foi possível confirmar o agendamento.");
+        return;
+      }
+    } catch (err) {
+      console.error(err); toast.error("Falha de conexão. Tente novamente."); return;
+    } finally { setSubmitting(false); }
+    const mensagem = `Olá, Alex! Gostaria de confirmar meu agendamento no Lava-Car.\n\n*Resumo do agendamento:*\n\n*Nome:* ${form.nome}\n*Serviço:* ${service.name}${service.priceHint ? ` (${service.priceHint})` : ""}\n*Valor:* ${service.price}\n*Veículo:* ${form.modelo}\n*Data:* ${formatDateBR(date)}\n*Horário:* ${time}\n\nAguardo a confirmação da vaga!`;
+    window.location.href = `https://wa.me/554192701937?text=${encodeURIComponent(mensagem)}`;
+  };
+
+  const daysInMonth = new Date(viewMonth.y, viewMonth.m + 1, 0).getDate();
+  const firstWeekday = new Date(viewMonth.y, viewMonth.m, 1).getDay();
+  const canGoPrev = viewMonth.y > now.getFullYear() || (viewMonth.y === now.getFullYear() && viewMonth.m > now.getMonth());
+  const selectedIsToday = !!date && date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() === now.getDate();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const isPastTime = (t: string) => {
+    if (!selectedIsToday) return false;
+    const [h, m] = t.split(":").map(Number);
+    return h * 60 + m <= nowMinutes;
+  };
+
+  return (
+    <main className="min-h-screen overflow-x-hidden bg-white text-zinc-950">
+      <nav className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-[#080b10]/95 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
+          <button onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} className="flex items-center gap-3">
+            <img src={logo} alt="Alex Lava-Car" className="h-11 w-11 object-contain" />
+            <div className="text-left leading-tight text-white">
+              <strong className="block text-sm tracking-wide">ALEX LAVA-CAR</strong>
+              <span className="text-[10px] uppercase tracking-[0.24em] text-white/60">Estética automotiva</span>
+            </div>
+          </button>
+          <div className="hidden items-center gap-7 text-sm font-semibold text-white/75 md:flex">
+            <button onClick={scrollToServices} className="transition hover:text-orange-400">Serviços</button>
+            <button onClick={scrollToBooking} className="transition hover:text-orange-400">Agendamento</button>
+            <a href="#localizacao" className="transition hover:text-orange-400">Localização</a>
+          </div>
+          <button onClick={scrollToBooking} className="rounded-full bg-orange-500 px-4 py-2 text-xs font-extrabold uppercase tracking-wider text-black transition hover:bg-orange-400 sm:px-5 sm:text-sm">Agendar</button>
+        </div>
+      </nav>
+
+      <header className="relative min-h-[760px] overflow-hidden pt-16 lg:min-h-[820px]">
+        <div className="absolute inset-0">
+          <video src={heroVideo} autoPlay muted={muted} playsInline preload="metadata" onEnded={() => setVideoEnded(true)} className={`h-full w-full object-cover transition-opacity duration-1000 ${videoEnded ? "opacity-0" : "opacity-100"}`} />
+          {HERO_PHOTOS.map((src, i) => <img key={src} src={src} alt="" aria-hidden loading={i === 0 ? "eager" : "lazy"} className="absolute inset-0 h-full w-full object-cover transition-opacity duration-1000" style={{ opacity: videoEnded && photoIdx === i ? 1 : 0 }} />)}
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(5,7,11,.95)_0%,rgba(5,7,11,.76)_42%,rgba(5,7,11,.3)_72%,rgba(5,7,11,.45)_100%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(0deg,#080b10_0%,transparent_28%,transparent_100%)]" />
+          <div className="absolute inset-0 opacity-40 [background:radial-gradient(circle_at_72%_36%,rgba(249,115,22,.35),transparent_27%)]" />
+        </div>
+        <button onClick={() => setMuted((m) => !m)} aria-label={muted ? "Ativar som" : "Desativar som"} className="absolute right-5 top-24 z-20 grid h-10 w-10 place-items-center rounded-full border border-white/15 bg-black/45 text-white/80 backdrop-blur-md transition hover:border-orange-400 hover:text-orange-400">
+          {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+        </button>
+        <div className="relative z-10 mx-auto flex min-h-[700px] max-w-7xl items-center px-5 py-20 sm:px-6 lg:min-h-[760px]">
+          <div className="max-w-3xl animate-fade-up">
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-orange-400/25 bg-orange-400/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-orange-300 backdrop-blur-md"><Sparkles className="h-3.5 w-3.5" /> Cuidado que aparece no primeiro olhar</div>
+            <h1 className="max-w-3xl text-5xl font-black uppercase leading-[.92] tracking-[-0.045em] text-white sm:text-6xl lg:text-8xl">Seu carro com <span className="text-orange-500">presença de novo.</span></h1>
+            <p className="mt-7 max-w-xl text-base leading-relaxed text-white/65 sm:text-lg">Lavagem e estética automotiva com atenção aos detalhes, acabamento caprichado e agendamento sem enrolação.</p>
+            <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+              <button onClick={scrollToServices} className="group inline-flex items-center justify-center gap-2 rounded-2xl bg-orange-500 px-7 py-4 text-sm font-black uppercase tracking-[0.12em] text-black shadow-[0_20px_60px_-20px_rgba(249,115,22,.8)] transition hover:-translate-y-0.5 hover:bg-orange-400">Ver serviços <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" /></button>
+              <a href="https://wa.me/554192701937" target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/15 bg-white/5 px-7 py-4 text-sm font-bold text-white backdrop-blur-md transition hover:border-white/30 hover:bg-white/10"><MessageCircle className="h-4 w-4" /> Falar no WhatsApp</a>
+            </div>
+            <div className="mt-10 grid max-w-xl grid-cols-1 gap-3 sm:grid-cols-2">
+              {[[BadgeCheck, "Atendimento caprichado"], [ShieldCheck, "Horário reservado"]].map(([Icon, label], i) => {
+                const BenefitIcon = Icon as typeof BadgeCheck;
+                return <div key={i} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-sm text-white/70 backdrop-blur-md"><BenefitIcon className="h-4 w-4 text-orange-400" />{label as string}</div>;
+              })}
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <section id="services" className="relative scroll-mt-16 bg-white py-20 sm:py-24">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+          <div className="mb-10 flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
+            <div><p className="mb-3 text-xs font-black uppercase tracking-[0.28em] text-orange-500">Serviços e valores</p><h2 className="max-w-2xl text-4xl font-black uppercase leading-none tracking-[-0.035em] text-zinc-950 sm:text-5xl lg:text-6xl">Escolha o cuidado ideal para o seu veículo.</h2></div>
+            <p className="max-w-md text-sm leading-relaxed text-zinc-600 sm:text-base">Deslize para conhecer os serviços, compare os valores e escolha o cuidado que seu veículo merece.</p>
+          </div>
+          <div className="-mx-4 overflow-x-auto px-4 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex snap-x gap-4">
+              {services.map((s, idx) => {
+                const active = serviceId === s.id;
+                const Icon = s.icon;
+                return (
+                  <button key={s.id} onClick={() => { setServiceId(s.id); setTimeout(scrollToBooking, 180); }} style={{ animationDelay: `${idx * 60}ms` }} className={`group relative w-[250px] shrink-0 snap-start overflow-hidden rounded-[24px] border text-left transition-all duration-300 animate-fade-up sm:w-[280px] ${active ? "border-orange-400 bg-orange-50 shadow-[0_18px_50px_-28px_rgba(249,115,22,.45)]" : "border-zinc-200 bg-white hover:-translate-y-1 hover:border-orange-200"}`}>
+                    <div className="relative h-36 overflow-hidden border-b border-zinc-100 bg-zinc-100">
+                      <div className="absolute left-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-xl border border-white/80 bg-white/90 text-orange-500 shadow-sm"><Icon className="h-4 w-4" /></div>
+                      {active && <div className="absolute right-3 top-3 z-10 grid h-7 w-7 place-items-center rounded-full bg-orange-500 text-black"><Check className="h-4 w-4" strokeWidth={3} /></div>}
+                      <img src={s.image} alt={s.name} loading="lazy" className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
+                    </div>
+                    <div className="p-4">
+                      {s.priceHint && <span className="mb-2 block text-[10px] font-black uppercase tracking-[0.2em] text-orange-500">{s.priceHint}</span>}
+                      <h3 className="min-h-[44px] text-base font-extrabold uppercase leading-tight text-zinc-950">{s.name}</h3>
+                      <div className="mt-4 flex items-end justify-between gap-3"><div><span className="block text-[10px] uppercase tracking-[0.18em] text-zinc-400">Valor</span><strong className="text-xl font-black text-orange-500">{s.price}</strong></div><span className="grid h-9 w-9 place-items-center rounded-full border border-zinc-200 bg-zinc-50 text-zinc-500 transition group-hover:border-orange-300 group-hover:text-orange-500"><ArrowRight className="h-4 w-4" /></span></div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <p className="mt-5 text-center text-xs text-zinc-500">*O valor final de serviços “a partir de” pode variar conforme tamanho e condição do item.</p>
+        </div>
+      </section>
+
+      <section id="booking" className="scroll-mt-16 border-y border-zinc-200 bg-[#faf8f5] py-20 sm:py-24">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+          <div className="grid gap-8 lg:grid-cols-[.8fr_1.2fr] lg:gap-12">
+            <aside className="lg:sticky lg:top-24 lg:self-start">
+              <p className="mb-3 text-xs font-black uppercase tracking-[0.28em] text-orange-500">Reservar horário</p>
+              <h2 className="text-4xl font-black uppercase leading-none tracking-[-0.035em] text-zinc-950 sm:text-5xl">Escolha o melhor dia. O resto é com a gente.</h2>
+              <p className="mt-5 max-w-lg text-base leading-relaxed text-zinc-600">Preencha seus dados, escolha a data e o horário disponível. O pedido é registrado e você segue para o WhatsApp para combinar a confirmação com a equipe.</p>
+              {service && serviceBenefits && (
+                <div className="mt-6 flex flex-wrap items-center gap-2" aria-live="polite" aria-atomic="true">
+                  <span className="inline-flex max-w-full items-center rounded-full border border-orange-200 bg-orange-50 px-3 py-1.5 text-[11px] font-bold text-orange-700">{service.name}{service.priceHint ? ` (${service.priceHint})` : ""} • {service.price}</span>
+                  {serviceBenefits.map((benefit) => <span key={benefit} className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-[11px] font-medium text-zinc-700"><Check aria-hidden="true" className="h-3 w-3 shrink-0 text-orange-500" />{benefit}</span>)}
+                </div>
+              )}
+            </aside>
+            <div className="rounded-[32px] border border-zinc-200 bg-white p-4 shadow-[0_20px_60px_-35px_rgba(0,0,0,.22)] sm:p-7">
+              <div className="mb-7 flex items-center justify-center">
+                {[{ n: 1, label: "Dados" }, { n: 2, label: "Data" }, { n: 3, label: "Horário" }].map(({ n, label }, i) => {
+                  const done = currentStep > n;
+                  const active = currentStep === n;
+                  return <div key={n} className="flex items-center"><div className="flex flex-col items-center gap-2"><div className={`grid h-9 w-9 place-items-center rounded-full border text-xs font-black transition ${done || active ? "border-orange-400 bg-orange-500 text-black" : "border-zinc-200 bg-zinc-50 text-zinc-400"}`}>{done ? <Check className="h-4 w-4" strokeWidth={3} /> : n}</div><span className={`text-[9px] font-black uppercase tracking-wider ${done || active ? "text-zinc-950" : "text-zinc-400"}`}>{label}</span></div>{i < 2 && <div className={`mx-2 mb-5 h-px w-8 sm:mx-4 sm:w-16 ${currentStep > n ? "bg-orange-500" : "bg-zinc-200"}`} />}</div>;
+                })}
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Seu nome" value={form.nome} onChange={(v) => setForm({ ...form, nome: v })} placeholder="Ex: Alexandre" icon={User} />
+                <Field label="WhatsApp" value={form.whats} onChange={(v) => setForm({ ...form, whats: v })} placeholder="(41) 99999-9999" inputMode="tel" icon={Phone} />
+                <div className="sm:col-span-2"><Field label="Modelo do veículo" value={form.modelo} onChange={(v) => setForm({ ...form, modelo: v })} placeholder="Ex: Honda Civic 2022" icon={CarFront} /></div>
+              </div>
+              <div className="my-7 h-px bg-zinc-200" />
+              <div className="grid gap-6 xl:grid-cols-[1.08fr_.92fr]">
+                <div>
+                  <div className="mb-4 flex items-center justify-between">
+                    <button disabled={!canGoPrev} onClick={() => { if (!canGoPrev) return; setViewMonth((v) => v.m === 0 ? { y: v.y - 1, m: 11 } : { y: v.y, m: v.m - 1 }); }} className="grid h-9 w-9 place-items-center rounded-xl border border-zinc-200 bg-zinc-50 text-zinc-600 disabled:opacity-20"><ChevronLeft className="h-4 w-4" /></button>
+                    <div className="flex items-center gap-2"><CalIcon className="h-4 w-4 text-orange-500" /><strong className="text-sm uppercase tracking-wider text-zinc-900">{MONTHS_PT[viewMonth.m]} {viewMonth.y}</strong></div>
+                    <button onClick={() => setViewMonth((v) => v.m === 11 ? { y: v.y + 1, m: 0 } : { y: v.y, m: v.m + 1 })} className="grid h-9 w-9 place-items-center rounded-xl border border-zinc-200 bg-zinc-50 text-zinc-600"><ChevronRight className="h-4 w-4" /></button>
+                  </div>
+                  <div className="grid grid-cols-7 gap-1.5 text-center text-[9px] font-black uppercase tracking-wider text-zinc-400">{["D", "S", "T", "Q", "Q", "S", "S"].map((d, i) => <span key={`${d}-${i}`}>{d}</span>)}</div>
+                  <div className="mt-2 grid grid-cols-7 gap-1.5">
+                    {Array.from({ length: firstWeekday }).map((_, i) => <span key={`blank-${i}`} />)}
+                    {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
+                      const d = new Date(viewMonth.y, viewMonth.m, day);
+                      const iso = formatDateISO(d);
+                      const isPast = d < todayStart;
+                      const isClosed = closedDays.has(iso);
+                      const isSel = !!date && formatDateISO(date) === iso;
+                      const disabled = isPast || isClosed;
+                      return <button key={day} disabled={disabled} onClick={() => { setDate(d); setTime(null); }} className={`aspect-square rounded-xl text-xs font-bold transition ${isSel ? "bg-orange-500 text-black" : disabled ? "cursor-not-allowed bg-zinc-50 text-zinc-300 line-through" : "border border-zinc-200 bg-white text-zinc-700 hover:border-orange-300 hover:text-orange-500"}`}>{day}</button>;
+                    })}
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-[.18em] text-zinc-500"><Clock className="h-4 w-4 text-orange-500" /> Horários disponíveis</p>
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 xl:grid-cols-3">
+                    {(date && date.getDay() === 0 ? SUNDAY_TIMES : WEEKDAY_TIMES).map((t) => {
+                      const busy = busyTimes.has(t) || isPastTime(t) || !date || loadingBusy || busyError;
+                      const selected = time === t;
+                      return <button key={t} disabled={busy} onClick={() => setTime(t)} className={`rounded-xl border py-3 text-xs font-extrabold transition ${selected ? "border-orange-400 bg-orange-500 text-black" : busy ? "cursor-not-allowed border-zinc-100 bg-zinc-50 text-zinc-300 line-through" : "border-zinc-200 bg-white text-zinc-700 hover:border-orange-300 hover:text-orange-500"}`}>{t}</button>;
+                    })}
+                  </div>
+                  {!date && <p className="mt-3 text-xs text-zinc-500">Selecione uma data para liberar os horários.</p>}
+                  {busyError && <p role="alert" className="mt-3 text-xs text-orange-600">Não foi possível verificar as vagas. Selecione a data novamente para tentar de novo.</p>}
+                </div>
+              </div>
+              <div className="mt-7 rounded-2xl border border-orange-200 bg-orange-50 p-4 sm:flex sm:items-center sm:justify-between sm:gap-5">
+                <div><span className="text-[10px] font-black uppercase tracking-[.18em] text-zinc-500">Resumo</span><strong className="mt-1 block text-sm text-zinc-950">{service ? service.name : "Nenhum serviço selecionado"}</strong><span className="text-xs text-zinc-600">{date ? formatDateBR(date) : "Data pendente"} {time ? `· ${time}` : ""}</span></div>
+                <strong className="mt-3 block text-2xl font-black text-orange-500 sm:mt-0">{service ? service.price : "R$ —"}</strong>
+              </div>
+              <button onClick={handleWhatsAppRedirect} disabled={submitting} className="mt-4 flex w-full items-center justify-center gap-3 rounded-2xl bg-[#25D366] px-6 py-4 text-sm font-black uppercase tracking-[.1em] text-black transition hover:-translate-y-0.5 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"><MessageCircle className="h-5 w-5 fill-black" strokeWidth={0} /> {submitting ? "Salvando agendamento..." : "Confirmar via WhatsApp"}</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-white py-20" id="localizacao">
+        <div className="mx-auto grid max-w-7xl gap-5 px-4 sm:px-6 lg:grid-cols-2">
+          <a href="https://www.instagram.com/alexlavacar17?igsh=MWliODEzMjZ4cDh5bw==" target="_blank" rel="noopener noreferrer" className="group overflow-hidden rounded-[28px] border border-zinc-200 bg-white">
+            <div className="flex items-center justify-between border-b border-zinc-200 p-5"><div><p className="text-[10px] font-black uppercase tracking-[.2em] text-orange-500">Instagram</p><strong className="mt-1 block text-lg text-zinc-950">Acompanhe os resultados</strong></div><Instagram className="h-6 w-6 text-zinc-400 transition group-hover:text-orange-500" /></div>
+            <img src={instagramCard} alt="Instagram Alex Lava-Car" className="h-[330px] w-full object-cover object-top transition duration-500 group-hover:scale-[1.02]" loading="lazy" />
+          </a>
+          <div className="overflow-hidden rounded-[28px] border border-zinc-200 bg-white">
+            <div className="flex items-center justify-between border-b border-zinc-200 p-5"><div><p className="text-[10px] font-black uppercase tracking-[.2em] text-orange-500">Localização</p><strong className="mt-1 block text-lg text-zinc-950">Venha até a Alex Lava-Car</strong></div><MapPin className="h-6 w-6 text-zinc-400" /></div>
+            <iframe title="Localização Alex Lava-Car" src="https://www.google.com/maps?q=-20.8038883,-48.8034019&z=17&output=embed" width="100%" height={330} style={{ border: 0, display: "block", filter: "grayscale(.15) contrast(1.05)" }} allowFullScreen loading="lazy" />
+          </div>
+        </div>
+      </section>
+      <footer className="border-t border-zinc-200 bg-white py-10">
+        <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-6 px-4 text-center sm:px-6 md:flex-row md:text-left">
+          <div className="flex items-center gap-3"><img src={logo} alt="Alex Lava-Car" className="h-12 w-12 object-contain" /><div><strong className="block text-sm text-zinc-950">ALEX LAVA-CAR</strong><span className="text-xs text-zinc-500">Estética Automotiva</span></div></div>
+          <p className="text-xs text-zinc-500">© {new Date().getFullYear()} Alex Lava-Car. Todos os direitos reservados.</p>
+          <a href="https://wa.me/5517991279772" target="_blank" rel="noopener noreferrer" className="text-xs text-zinc-500 transition hover:text-orange-500">feito por <strong>Franco</strong></a>
+        </div>
+      </footer>
+      <a href="https://wa.me/554192701937" target="_blank" rel="noreferrer" aria-label="Falar no WhatsApp" className="fixed bottom-5 right-5 z-50 grid h-14 w-14 place-items-center rounded-full bg-[#25D366] text-black shadow-[0_12px_35px_-10px_rgba(37,211,102,.75)] transition hover:scale-105"><MessageCircle className="h-6 w-6 fill-black" strokeWidth={0} /></a>
+    </main>
+  );
+}
+
+function Field({ label, value, onChange, placeholder, inputMode, icon: Icon }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; inputMode?: "text" | "tel" | "email"; icon: typeof User; }) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">{label}</span>
+      <div className="flex items-center rounded-2xl border border-zinc-200 bg-zinc-50 px-4 transition focus-within:border-orange-300 focus-within:bg-orange-50">
+        <Icon className="h-4 w-4 shrink-0 text-orange-500" />
+        <input type="text" inputMode={inputMode} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="w-full bg-transparent px-3 py-3.5 text-sm font-medium text-zinc-900 outline-none placeholder:text-zinc-400" />
+      </div>
+    </label>
+  );
+}
