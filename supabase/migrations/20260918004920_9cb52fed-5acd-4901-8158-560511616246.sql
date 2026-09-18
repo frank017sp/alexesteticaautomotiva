@@ -1,0 +1,1 @@
+DELETE FROM public.bookings WHERE cliente_nome = 'Teste' AND cliente_whats = '41999998888' AND data_agendamento = '2026-09-18';
