@@ -10,15 +10,21 @@ const dateSchema = z.object({
 export const getBusyTimes = createServerFn({ method: "POST" })
   .inputValidator((input) => dateSchema.parse(input))
   .handler(async ({ data }) => {
-    const { data: rows, error } = await supabaseAdmin
-      .from("bookings")
-      .select("horario")
-      .eq("data_agendamento", data.date);
-    if (error) {
-      console.error("getBusyTimes error", error);
-      return { busy: [] as string[], error: "Não foi possível carregar os horários." };
+    try {
+      // A consulta é feita no servidor, sem expor chaves nem dados pessoais.
+      const { data: rows, error } = await supabaseAdmin
+        .from("bookings")
+        .select("horario")
+        .eq("data_agendamento", data.date);
+      if (error) throw error;
+      return {
+        busy: (rows ?? []).map((row) => String(row.horario).trim().slice(0, 5)),
+        error: null,
+      };
+    } catch (error) {
+      console.error("getBusyTimes: falha ao consultar vagas no servidor", error);
+      return { busy: [] as string[], error: "Disponibilidade temporariamente indisponível." };
     }
-    return { busy: rows.map((r) => r.horario as string), error: null };
   });
 
 const bookingSchema = z.object({
