@@ -371,6 +371,41 @@ function Index() {
       cancelled = true;
     };
   }, [date, retryAvailability, getBusyTimesFn]);
+  // Atualização ao vivo: a cada 15s (e ao voltar para a aba) busca as vagas de novo,
+  // sem piscar a tela, para que horários reservados por outros clientes sumam na hora.
+  useEffect(() => {
+    if (!date) return;
+    const iso = formatDateISO(date);
+    let active = true;
+    const refresh = () => {
+      getBusyTimesFn({ data: { date: iso } })
+        .then((res) => {
+          if (!active || res.error) return;
+          const occupied = new Set((res.busy ?? []).map(normalizeSlot));
+          setBusyTimes(occupied);
+          setBusyError(false);
+          setTime((prev) => {
+            if (prev && occupied.has(prev)) {
+              setFilledSlot(prev);
+              toast.error(`O horário das ${prev} acabou de ser reservado. Escolha outro.`);
+              return null;
+            }
+            return prev;
+          });
+        })
+        .catch(() => {});
+    };
+    const id = window.setInterval(refresh, 15000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      active = false;
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [date, getBusyTimesFn]);
   const scrollToBooking = () =>
     document.getElementById("booking")?.scrollIntoView({ behavior: "smooth", block: "start" });
   const scrollToServices = () =>
